@@ -1,6 +1,6 @@
 # Trade-Prediction-Model-UCSB-DataOrbit-2025
 
-Group: Max Rong, Daniel Larson, Justin Zhang,
+Group: Max Rong, Daniel Larson, Justin Zhang, Albert Chui
 
 What inspired: Our group was inspired by a mutual appreciation for soccer which led us to seek out and examine the relationship between player statistics and their probability of being traded.
 
