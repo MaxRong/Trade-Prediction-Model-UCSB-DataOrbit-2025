@@ -1,0 +1,136 @@
+---
+title: "p4"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(tidygraph)
+library(kableExtra)
+```
+
+```{r}
+visplay <- read.csv("player_vis")
+match <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-MATCH.csv")
+```
+
+```{r}
+home_team_players <- match %>% select(home_team_api_id, home_player_1, home_player_2, home_player_3, home_player_4, home_player_5, home_player_6, home_player_7, home_player_8, home_player_9, home_player_10, home_player_11) %>% na.omit()
+away_team_players <- match %>% select(away_team_api_id, away_player_1, away_player_2, away_player_3, away_player_4, away_player_5, away_player_6, away_player_7, away_player_8, away_player_9, away_player_10, away_player_11) %>% na.omit()
+```
+
+```{r}
+player_long <- away_team_players %>%
+  pivot_longer(cols = starts_with("away_player"), 
+               names_to = "player position", 
+               values_to = "playerID")
+player_long2 <- home_team_players %>%
+  pivot_longer(cols = starts_with("home_player"), 
+               names_to = "player position", 
+               values_to = "playerID")
+player_long <- player_long %>%
+  rename(teamID = away_team_api_id)
+player_long2 <- player_long2 %>%
+  rename(teamID = home_team_api_id)
+longlong <- rbind(player_long, player_long2)
+```
+
+```{r}
+team_count <- longlong %>%
+  group_by(playerID) %>%
+  summarise(unique_teams = n_distinct(teamID))
+```
+
+```{r}
+team_count %>% group_by(unique_teams) %>% summarize(numbers = n())
+```
+
+```{r}
+ggplot(team_count) +
+  geom_histogram(aes(x = unique_teams - 1), bins = 8) +
+  labs(x = "Times Traded", y = "Count of Players", title = "Players traded n times") 
+```
+
+```{r}
+player_time <- read.csv("play_team")
+```
+
+```{r}
+player_time <- player_time %>% group_by(year1) %>% arrange(year1, month1)
+player_time <- player_time %>% mutate(traded = case_when(
+  traded == "False" ~ FALSE, 
+  traded == "True" ~ TRUE
+))
+traded_count <- player_time %>%
+  group_by(season) %>%
+  summarize(traded_count = sum(traded == TRUE, na.rm = TRUE))
+traded_count
+```
+
+```{r}
+season_count <- player_time %>%
+  group_by(season) %>%
+  summarize(n= n())
+season_count
+```
+
+```{r}
+ts.data <- data.frame(
+  ses_tra = traded_count$traded_count/season_count$n
+)
+```
+
+```{r}
+ts.plot(ts.data)
+```
+
+```{r}
+fit <- Arima(ts.data, order = c(1,0,1))
+forecasted_values <- forecast(fit, h = 3)
+plot(forecasted_values)
+```
+
+```{r}
+visplay <- visplay %>% mutate(
+  traded = case_when(
+    traded == "False" ~ FALSE,
+    traded == "True" ~ TRUE
+  )
+)
+```
+
+```{r}
+visplay_mean <- visplay %>% group_by(player_api_id) %>%
+  summarize(overall_rating = mean(overall_rating), potential = mean(potential), Traded_Status = ifelse(sum(traded) == 0, "Never Traded", "Traded at least Once") )
+```
+
+```{r}
+ggplot(visplay_mean) +
+  geom_hex(aes(y = overall_rating, x = player_api_id)) +
+  facet_wrap(~Traded_Status) +
+  labs(title = "Traded Status and Overall Rating", y = "Overall Rating", x = "Player ID") + 
+  scale_fill_gradient(low = "blue", high = "red")
+```
+
+```{r}
+ggplot(visplay_mean) +
+  geom_hex(aes(y = potential, x = player_api_id)) +
+  facet_wrap(~Traded_Status) +
+  labs(title = "Traded Status and Overall Potential", y = "Overall Potential", x = "Player ID")+
+  scale_fill_gradient(low = "blue", high = "red")
+```
+
+```{r}
+ggplot(visplay_mean) +
+  geom_hex(aes(y = overall_rating - potential, x = player_api_id)) +
+  facet_wrap(~Traded_Status) +
+  labs(title = "Traded Status and Potential Difference", y = "Potential Difference", x = "Player ID") +
+  scale_fill_gradient(low = "blue", high = "red")
+```
+
+```{r}
+corrplotter <- visplay %>% select(finishing, stamina, strength, positioning, sprint_speed, acceleration, short_passing, dribbling, reactions, vision) %>% na.omit()
+corrplotter2 <- cor(corrplotter)
+corrplot(corrplotter2, method = "square")
+```

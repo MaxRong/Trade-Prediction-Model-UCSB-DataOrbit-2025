@@ -1,0 +1,107 @@
+---
+title: "p3"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(themis)
+library(astsa)
+library(forecast)
+```
+
+```{r}
+player_time <- read.csv("play_team")
+```
+
+Now we want to see how we are changing by time
+
+```{r}
+player_time <- player_time %>% group_by(year1) %>% arrange(year1, month1)
+```
+
+```{r}
+# we have the number of players traded each season
+player_time <- player_time %>% mutate(traded = case_when(
+  traded == "False" ~ FALSE, 
+  traded == "True" ~ TRUE
+))
+```
+
+```{r}
+traded_count <- player_time %>%
+  group_by(season) %>%
+  summarize(traded_count = sum(traded == TRUE, na.rm = TRUE))
+traded_count
+```
+
+```{r}
+season_count <- player_time %>%
+  group_by(season) %>%
+  summarize(n= n())
+season_count
+```
+
+```{r}
+traded_count_ses <- data.frame(
+  season = traded_count$season,
+  ses_tra = traded_count$traded_count/season_count$n
+)
+```
+
+```{r}
+ts.plot(traded_count_ses$ses_tra)
+```
+
+```{r}
+ar(traded_count_ses$ses_tra)
+```
+
+```{r}
+acf(traded_count_ses$ses_tra)
+```
+
+```{r}
+diff_count <- diff(traded_count_ses$ses_tra)
+```
+
+```{r}
+ts.plot(diff_count)
+```
+
+```{r}
+acf(diff_count)
+```
+
+```{r}
+arima(traded_count_ses$ses_tra, c(0, 1, 2))
+```
+
+```{r}
+acf2(traded_count_ses$ses_tra)
+```
+
+```{r}
+fit <- auto.arima(traded_count_ses$ses_tra)
+summary(fit)
+```
+
+```{r}
+forecasted_values <- forecast(fit, h = 5)
+plot(forecasted_values)
+```
+
+```{r}
+ts_data <- traded_count_ses$ses_tra
+fit <- Arima(ts_data, order = c(1,0,1))
+```
+
+```{r}
+fit <- Arima(ts_data, order = c(1,0,1))
+forecasted_values <- forecast(fit, h = 3)
+plot(forecasted_values)
+```
+
+```{r}
+
+```

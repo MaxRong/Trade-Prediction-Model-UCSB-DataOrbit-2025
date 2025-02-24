@@ -1,0 +1,359 @@
+---
+title: "p1"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(tidygraph)
+library(kableExtra)
+```
+
+```{r}
+player <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-PLAYER.csv")
+team <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-TEAM.csv")
+team_att <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-TEAM_ATTRIBUTES.csv")
+player_att <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-PLAYER_ATTRIBUTES.csv")
+match <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-MATCH.csv")
+league <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-LEAGUE.csv")
+country <- read.csv("Predictive Modeling Track - European Soccer Dataset/european_soccer_dataset-COUNTRY.csv")
+```
+
+```{r}
+# original <- c(player, team, team_att, player_att, match, league, country)
+# view(player)
+# view(team)
+# view(team_att)
+# view(player_att)
+# view(match)
+# view(league)
+# view(country)
+```
+
+```{r}
+head(team_att, 2) %>% kable()
+```
+
+![](images/clipboard-9133593.png)
+
+```{r}
+colnames(team_att)
+```
+
+```{r}
+head(match, 3) %>% kable()
+```
+
+```{r}
+nrow(match)
+ncol(match)
+```
+
+```{r}
+head(player_att, 10) %>% view()
+```
+
+```{r}
+unique(player_att$id) %>% length()
+```
+
+```{r}
+ggplot(player) + 
+  geom_point(aes(x = height, y = weight)) + 
+  labs(title = "Height and Weight of Disgusting Soccer Players", y = "Weight", x = "Height")
+```
+
+```{r}
+ggplot(player) + 
+  geom_histogram(aes(x = height, y = after_stat(density)), fill = "red") + 
+  geom_density(aes(x = height), bw = "nrd", color = "blue") + 
+  labs(title = "Height of Disgusting Soccer Players",x = "Height")
+```
+
+```{r}
+which(is.na(match$away_player_1) == FALSE) %>% length()
+```
+
+```{r}
+head(team_att, 10) %>% kable()
+```
+
+```{r}
+ts.plot(na.omit(head(player_att$stamina, 3)))
+```
+
+```{r}
+# sort by date
+```
+
+```{r}
+home_team_players <- match %>% select(home_team_api_id, home_player_1, home_player_2, home_player_3, home_player_4, home_player_5, home_player_6, home_player_7, home_player_8, home_player_9, home_player_10, home_player_11) %>% na.omit()
+away_team_players <- match %>% select(away_team_api_id, away_player_1, away_player_2, away_player_3, away_player_4, away_player_5, away_player_6, away_player_7, away_player_8, away_player_9, away_player_10, away_player_11) %>% na.omit()
+```
+
+```{r}
+player_long <- away_team_players %>%
+  pivot_longer(cols = starts_with("away_player"), 
+               names_to = "player position", 
+               values_to = "playerID")
+player_long2 <- home_team_players %>%
+  pivot_longer(cols = starts_with("home_player"), 
+               names_to = "player position", 
+               values_to = "playerID")
+player_long <- player_long %>%
+  rename(teamID = away_team_api_id)
+player_long2 <- player_long2 %>%
+  rename(teamID = home_team_api_id)
+longlong <- rbind(player_long, player_long2)
+```
+
+```{r}
+team_count <- longlong %>%
+  group_by(playerID) %>%
+  summarise(unique_teams = n_distinct(teamID))
+```
+
+```{r}
+#verfiying the data is correct
+thing1 <- longlong %>% filter(playerID == 196203)
+unique(thing1$teamID)
+```
+
+```{r}
+ggplot(team_count) + 
+  geom_histogram(aes(x = unique_teams))
+```
+
+```{r}
+thing1 <- team_count %>% filter(unique_teams != 1) %>% filter(unique_teams != 2)
+```
+
+```{r}
+ggplot(thing1) + 
+  geom_histogram(aes(x = unique_teams)) + 
+  labs(title = "Number of players traded 3+ times")
+```
+
+```{r}
+team_count %>% group_by(unique_teams) %>% summarize(numbers = n())
+```
+
+This is the same data as the histogram, except it is better.
+
+```{r}
+# getting the data
+home_team_players2 <- match %>% select(date, home_team_api_id, home_player_1, home_player_2, home_player_3, home_player_4, home_player_5, home_player_6, home_player_7, home_player_8, home_player_9, home_player_10, home_player_11) %>% na.omit()
+away_team_players2 <- match %>% select(date, away_team_api_id, away_player_1, away_player_2, away_player_3, away_player_4, away_player_5, away_player_6, away_player_7, away_player_8, away_player_9, away_player_10, away_player_11) %>% na.omit()
+
+player_long2 <- away_team_players2 %>%
+  pivot_longer(cols = starts_with("away_player"), 
+               names_to = "player position", 
+               values_to = "playerID")
+player_long22 <- home_team_players2 %>%
+  pivot_longer(cols = starts_with("home_player"), 
+               names_to = "player position", 
+               values_to = "playerID")
+player_long2 <- player_long2 %>%
+  rename(teamID = away_team_api_id)
+player_long22 <- player_long22 %>%
+  rename(teamID = home_team_api_id)
+longlong2 <- rbind(player_long2, player_long22)
+```
+
+```{r}
+nrow(player_att)
+```
+
+```{r}
+nrow(team_count)
+```
+
+```{r}
+teams_and_player <- player_att %>% filter(player_api_id %in% team_count$playerID)
+nrow(teams_and_player)
+```
+
+```{r}
+team_count <- team_count %>%
+  rename(player_api_id = playerID)
+```
+
+```{r}
+teams_and_player<- inner_join(player_att, team_count, join_by(player_api_id))
+```
+
+```{r}
+lm(unique_teams ~ gk_reflexes + gk_positioning + gk_kicking + gk_handling + gk_diving + sliding_tackle + standing_tackle + marking + penalties + vision + positioning + interceptions + aggression + long_shots + strength + stamina + jumping + shot_power + balance + reactions + agility + sprint_speed + acceleration + ball_control + long_passing + free_kick_accuracy + curve + dribbling + volleys + short_passing + heading_accuracy + finishing + crossing, data = teams_and_player)
+```
+
+```{r}
+str(teams_and_player)
+```
+
+```{r}
+player_att %>% filter(preferred_foot == "right") %>% summarize(accuracy = mean(free_kick_accuracy))
+```
+
+```{r}
+player_att %>% filter(preferred_foot == "left") %>% summarize(accuracy = mean(free_kick_accuracy))
+```
+
+```{r}
+# do max minus their lowest?
+# for each season, how much lower do you need to be to get traded
+# august to may
+```
+
+```{r}
+# difference + traded? 
+```
+
+```{r}
+# not traded guy have amnay different player att
+team_count %>% filter(player_api_id == 505942)
+```
+
+```{r}
+nrow(team_count)
+```
+
+```{r}
+
+```
+
+```{r}
+diff_player <- player_att %>%
+  mutate(across(c(gk_reflexes , gk_positioning , gk_kicking , gk_handling , gk_diving , sliding_tackle , standing_tackle , marking , penalties , vision , positioning , interceptions , aggression , long_shots , strength , stamina , jumping , shot_power , balance , reactions , agility , sprint_speed , acceleration , ball_control , long_passing , free_kick_accuracy , curve , dribbling , volleys , short_passing , heading_accuracy , finishing , crossing), ~c(NA, diff(.)), .names = "{.col}_diff"))
+```
+
+```{r}
+# now we need to create columns that says if they were traded or not
+```
+
+```{r}
+diff_player$year <- substr(diff_player$date, 1, 4)
+diff_player$month <- substr(diff_player$date, 6, 7)
+```
+
+```{r}
+seasons_player <- diff_player %>%
+  mutate(season = case_when(
+    year == 2008 & month %in% c(8, 9, 10, 11, 12)  ~ "2008/2009",   
+    year == 2009 & month %in% c(1, 2, 3, 4, 5)  ~ "2008/2009", 
+    
+    year == 2009 & month %in% c(8, 9, 10, 11, 12)  ~ "2009/2010", 
+    year == 2010 & month %in% c(1, 2, 3, 4, 5)  ~ "2009/2010", 
+    
+    year == 2010 & month %in% c(8, 9, 10, 11, 12)  ~ "2010/2011", 
+    year == 2011 & month %in% c(1, 2, 3, 4, 5)  ~ "2010/2011", 
+    
+    year == 2011 & month %in% c(8, 9, 10, 11, 12)  ~ "2011/2012", 
+    year == 2012 & month %in% c(1, 2, 3, 4, 5)  ~ "2011/2012",
+    
+    year == 2012 & month %in% c(8, 9, 10, 11, 12)  ~ "2012/2013", 
+    year == 2013 & month %in% c(1, 2, 3, 4, 5)  ~ "2012/2013",
+    
+    year == 2013 & month %in% c(8, 9, 10, 11, 12)  ~ "2013/2014", 
+    year == 2014 & month %in% c(1, 2, 3, 4, 5)  ~ "2013/2014",
+    
+    year == 2014 & month %in% c(8, 9, 10, 11, 12)  ~ "2014/2015", 
+    year == 2015 & month %in% c(1, 2, 3, 4, 5)  ~ "2014/2015",
+    
+    year == 2015 & month %in% c(8, 9, 10, 11, 12)  ~ "2015/2016", 
+    year == 2016 & month %in% c(1, 02, 3, 4, 5)  ~ "2015/2016",
+    ))
+```
+
+```{r}
+player_seasons <- read.csv("Predictive Modeling Track - European Soccer Dataset/player_rec")
+```
+
+```{r}
+head(player_seasons)
+```
+
+```{r}
+years1 <- seasons_player$year %>% as.integer()
+months1 <- seasons_player$month %>% as.integer()
+seasons_player$year1 <- years1
+seasons_player$month1 <- months1
+```
+
+```{r}
+seasons_player <- seasons_player %>%
+  mutate(season = case_when(
+    year1 == 2008 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2008/2009",   
+    year1 == 2009 & month1 %in% c(1, 2, 3, 4, 5)  ~ "2008/2009", 
+    
+    year1 == 2009 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2009/2010", 
+    year1 == 2010 & month1 %in% c(1, 2, 3, 4, 5)  ~ "2009/2010", 
+    
+    year1 == 2010 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2010/2011", 
+    year1 == 2011 & month1 %in% c(1, 2, 3, 4, 5)  ~ "2010/2011", 
+    
+    year1 == 2011 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2011/2012", 
+    year1 == 2012 & month1 %in% c(1, 2, 3, 4, 5)  ~ "2011/2012",
+    
+    year1 == 2012 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2012/2013", 
+    year1 == 2013 & month1 %in% c(1, 2, 3, 4, 5)  ~ "2012/2013",
+    
+    year1 == 2013 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2013/2014", 
+    year1 == 2014 & month1 %in% c(1, 2, 3, 4, 5)  ~ "2013/2014",
+    
+    year1 == 2014 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2014/2015", 
+    year1 == 2015 & month1 %in% c(1, 2, 3, 4, 5)  ~ "2014/2015",
+    
+    year1 == 2015 & month1 %in% c(8, 9, 10, 11, 12)  ~ "2015/2016", 
+    year1 == 2016 & month1 %in% c(1, 02, 3, 4, 5)  ~ "2015/2016",
+    ))
+```
+
+```{r}
+player_seasons <- player_seasons %>%
+  rename(
+    player_api_id = playerid
+  )
+```
+
+```{r}
+seasons_player_dummy <- inner_join(seasons_player, player_seasons, 
+                                   by = c("player_api_id", "season"))
+```
+
+```{r}
+seasons_player_dummy %>% head() %>% view()
+
+```
+
+```{r}
+player_team_att <- seasons_player_dummy %>% select(traded, year1, month1, team, id, player_api_id, overall_rating, season, potential, finishing, dribbling, short_passing, acceleration, sprint_speed, stamina, strength, attacking_work_rate, defensive_work_rate, positioning, reactions, vision)
+diff_player_team_att <- seasons_player_dummy %>% select(traded, year1, month1, team, id, player_api_id, overall_rating, season, finishing_diff, potential, dribbling_diff, short_passing_diff, acceleration_diff, sprint_speed_diff, stamina_diff, strength_diff, attacking_work_rate, defensive_work_rate, positioning_diff, reactions_diff, vision_diff)
+```
+
+```{r}
+team_wr <- read.csv("Predictive Modeling Track - European Soccer Dataset/team_wr")
+```
+
+```{r}
+team_wr <- team_wr %>% 
+  rename(
+    team = teamid
+  )
+```
+
+```{r}
+play_team <- inner_join(player_team_att, team_wr, by = c("team", "season") )
+```
+
+```{r}
+diff_play_team <- inner_join(diff_player_team_att, team_wr, by = c("team", "season") )
+```
+
+```{r}
+write.csv(play_team, "play_team")
+```
+
+```{r}
+write.csv(diff_play_team, "diff_play_team")
+```

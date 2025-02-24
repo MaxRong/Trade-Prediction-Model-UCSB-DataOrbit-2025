@@ -1,0 +1,222 @@
+---
+title: "p2"
+format: html
+---
+
+```{r}
+player <- read.csv("play_team")
+```
+
+```{r, message = F}
+library(tidyverse)
+library(corrplot)
+library(janitor)
+library(tidymodels)
+library(themis)
+library(vip)
+library(yardstick)
+library(naniar)
+```
+
+```{r}
+corrplotter <- player %>% select(finishing, stamina, strength, positioning, sprint_speed, acceleration, short_passing, dribbling, reactions, vision) %>% na.omit()
+```
+
+```{r}
+corrplotter2 <- cor(corrplotter)
+corrplot(corrplotter2, method = "square")
+```
+
+Now we want to find the stats when they decreases
+
+```{r}
+player <- player %>% group_by(player_api_id) %>%
+  mutate(across(c(finishing, stamina, strength, positioning, sprint_speed, acceleration, short_passing, dribbling, reactions, vision), 
+                ~c(NA, diff(.)), .names = "{.col}"))
+```
+
+```{r}
+player <- player %>% ungroup() %>% select(finishing, stamina, strength, positioning, sprint_speed, acceleration, short_passing, dribbling, reactions, vision, winrate, traded) 
+```
+
+```{r}
+# remove the NA from our differenced data
+player <- player %>% na.omit()
+```
+
+```{r}
+vis_miss(player)
+```
+
+```{r}
+player$traded <- factor(ifelse(player$traded == "True", TRUE, FALSE))
+# splitting train and test
+set.seed(733)
+player_split <- initial_split(player, strata = "traded", prop = 0.7)
+player_train <- training(player_split)
+player_test <- testing(player_split)
+player_folds <- vfold_cv(player_train, v = 5, strata = "traded")
+```
+
+```{r}
+player_train %>%
+group_by(traded) %>%
+summarise(prop = n()/(dim(player_train)[1]))
+```
+
+```{r}
+player_recipe <- recipe(traded ~ ., data = player_train) %>%
+step_dummy(all_nominal_predictors()) %>%
+step_normalize(all_predictors()) %>%
+step_center(all_predictors()) %>%
+step_scale(all_predictors())
+```
+
+```{r}
+knn_mod <- nearest_neighbor(neighbors = tune()) %>%
+set_mode("classification") %>%
+set_engine("kknn")
+
+log_md <- logistic_reg() %>%
+set_engine("glm") %>%
+set_mode("classification")
+
+en_mod <- logistic_reg(mixture = tune(),
+penalty = tune()) %>%
+set_mode("classification") %>%
+set_engine("glmnet")
+
+rf_mod <- rand_forest(mtry = tune(), trees = tune(), min_n = tune()) %>%
+set_mode("classification") %>%
+set_engine("ranger", importance = "impurity")
+```
+
+```{r}
+rf_wkflow <- workflow() %>%
+add_model(rf_mod) %>%
+add_recipe(player_recipe)
+rf_grid <- grid_regular(
+mtry(range = c(1, 11)),
+trees(range = c(50, 500)),
+min_n(range = c(1, 10)),
+levels = 5
+)
+knn_wkflow <- workflow() %>%
+add_model(knn_mod) %>%
+add_recipe(player_recipe)
+log_wkflow <- workflow() %>%
+add_model(log_md) %>%
+add_recipe(player_recipe)
+en_wkflow <- workflow() %>%
+add_model(en_mod) %>%
+add_recipe(player_recipe)
+en_grid <- grid_regular(penalty(range = c(0, 1),
+trans = identity_trans()),
+mixture(range = c(0, 1)),
+levels = 10)
+neighbors_grid <- grid_regular(neighbors(range = c(1, 10)), levels = 10)
+```
+
+```{r}
+# tuning
+en_fit <- tune_grid(
+en_wkflow,
+resamples = player_folds,
+grid = en_grid
+)
+knn_fit <- tune_grid(
+knn_wkflow,
+resamples = player_folds,
+grid = neighbors_grid
+)
+log_fit <- tune_grid(
+log_wkflow,
+resamples = player_folds
+)
+```
+
+```{r}
+# do not run this
+#rf_fit <- tune_grid(
+#rf_wkflow,
+#resamples = player_folds,
+#grid = rf_grid
+#)
+
+```
+
+```{r}
+save(en_fit, knn_fit, log_fit, file = "fit2.Rdata")
+```
+
+```{r}
+load("fit2.Rdata")
+```
+
+```{r}
+autoplot(knn_fit)
+```
+
+```{r}
+autoplot(en_fit)
+```
+
+```{r}
+best_neighbors <- select_best(knn_fit)
+```
+
+```{r}
+knn_wf <- finalize_workflow(knn_wkflow, best_neighbors)
+best_en <- select_best(en_fit)
+en_wf <- finalize_workflow(en_wkflow, best_en)
+```
+
+```{r}
+knn_metric <- collect_metrics(knn_fit)%>% filter(.metric == "roc_auc") %>% arrange(desc(mean))
+log_metric <- collect_metrics(log_fit)%>% filter(.metric == "roc_auc") %>% arrange(desc(mean))
+en_metric <- collect_metrics(en_fit)%>% filter(.metric == "roc_auc") %>% arrange(desc(mean))
+knn_roc_1 <- knn_metric[1, "mean"]
+log_roc_1 <- log_metric[1, "mean"]
+en_roc_1 <- en_metric[1, "mean"]
+roc_names <- c("K-Nearest Neighbors", "Logistic Regression", "Elastic Net")
+roc_models <- bind_rows(knn_roc_1, log_roc_1, en_roc_1)
+roc_ult <- bind_cols(roc_names, roc_models) %>% arrange(desc(mean))
+```
+
+```{r}
+roc_ult
+
+```
+
+We want the highest roc_auc . Therefore Elastic Net is the best one.
+
+Now we need to fit the data
+
+```{r}
+en_final_fit <- fit(en_wf, data = player_train)
+```
+
+# Testing the model
+
+```{r}
+player_predict_class <- predict(en_final_fit, new_data = player_test, type = "class")
+player_predict_prob <- predict(en_final_fit, new_data = player_test, type = "prob")
+```
+
+```{r}
+tru_player <- player_test$traded
+predictions <- player_predict_prob %>%
+bind_cols(tru_player)
+```
+
+```{r}
+roc_ploter <- roc_curve(predictions, truth = ...3, .pred_FALSE)
+autoplot(roc_ploter)
+```
+
+```{r}
+predictions2 <- player_predict_class %>% bind_cols(tru_player)
+
+conf_mat(predictions2, truth = ...2, .pred_class) %>%
+  autoplot(type = "heatmap")
+```
